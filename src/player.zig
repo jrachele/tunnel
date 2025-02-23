@@ -24,30 +24,32 @@ pub fn update(player: *Player) void {
         .{ -1, 0 },
     };
 
-    // Rotate about the centroid
-    const center_x = (vertices[0][0] + vertices[1][0] + vertices[2][0]) / 3;
-    const center_y = (vertices[0][1] + vertices[1][1] + vertices[2][1]) / 3;
+    var rotated_points: [3]@Vector(2, f32) = vertices;
 
-    const cos_angle = std.math.cos(player.angle);
-    const sin_angle = std.math.sin(player.angle);
+    if (player.angle != 0) {
+        const cos_angle = std.math.cos(player.angle);
+        const sin_angle = std.math.sin(player.angle);
 
-    var rotated_points: [3]@Vector(2, f32) = undefined;
-    for (vertices, 0..) |vertex, i| {
-        const x = vertex[0];
-        const y = vertex[1];
+        // Rotate about the centroid
+        const center_x = (vertices[0][0] + vertices[1][0] + vertices[2][0]) / 3;
+        const center_y = (vertices[0][1] + vertices[1][1] + vertices[2][1]) / 3;
 
-        const translated_x = x - center_x;
-        const translated_y = y - center_y;
+        for (vertices, 0..) |vertex, i| {
+            const x = vertex[0];
+            const y = vertex[1];
 
-        const rotated_x = (translated_x * cos_angle) - (translated_y * sin_angle);
-        const rotated_y = (translated_x * sin_angle) + (translated_y * cos_angle);
+            const translated_x = x - center_x;
+            const translated_y = y - center_y;
 
-        const final_x = rotated_x + center_x;
-        const final_y = rotated_y + center_y;
-        rotated_points[i][0] = final_x;
-        rotated_points[i][1] = final_y;
+            const rotated_x = (translated_x * cos_angle) - (translated_y * sin_angle);
+            const rotated_y = (translated_x * sin_angle) + (translated_y * cos_angle);
+
+            const final_x = rotated_x + center_x;
+            const final_y = rotated_y + center_y;
+            rotated_points[i][0] = final_x;
+            rotated_points[i][1] = final_y;
+        }
     }
-
     // Update the rotated points to adapt to player size
     for (&rotated_points) |*p| {
         const s: @Vector(2, f32) = @splat(Player.SIZE / 2);

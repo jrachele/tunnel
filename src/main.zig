@@ -19,8 +19,8 @@ const GameState = struct {
     player: Player = .{},
     tunnel: Tunnel = undefined,
     advance_speed: u64 = 100, // Per second advance
-    seconds_since_last_advance: f64 = 0,
     score: u64 = 0,
+    seconds_since_last_advance: f64 = 0,
     time_elapsed: f64 = 0,
 
     pub fn init(allocator: std.mem.Allocator) !GameState {
@@ -42,12 +42,13 @@ const GameState = struct {
     }
 };
 
+// Globals
 var debug_info_enabled: bool = false;
+var update_timer: std.time.Timer = undefined;
+
 pub fn main() !void {
     raylib.initWindow(constants.screenWidth, constants.screenHeight, "Tunnel");
     defer raylib.closeWindow();
-
-    raylib.setTargetFPS(300);
 
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer switch (gpa.deinit()) {
@@ -62,14 +63,39 @@ pub fn main() !void {
     var game_state = try GameState.init(alloc);
     defer game_state.deinit();
 
-    while (!raylib.windowShouldClose()) {
-        // Update
-        try update(alloc, &game_state);
+    // Mutex for game state mutation
+    var game_mutex = std.Thread.Mutex{};
 
+    // Update thread is not bound by FPS
+    update_timer = std.time.Timer.start() catch unreachable;
+
+    const update_thread = try std.Thread.spawn(
+        .{},
+        updateThread,
+        .{ &game_mutex, alloc, &game_state },
+    );
+    defer update_thread.join();
+
+    // Draw loop, which is bound by FPS
+    while (!raylib.windowShouldClose()) {
         // Draw
         raylib.beginDrawing();
+        game_mutex.lock();
         draw(&game_state);
+        game_mutex.unlock();
         raylib.endDrawing();
+    }
+}
+
+fn updateThread(mutex: *std.Thread.Mutex, allocator: std.mem.Allocator, game_state: *GameState) void {
+    while (!raylib.windowShouldClose()) {
+        mutex.lock();
+        defer mutex.unlock();
+
+        update(allocator, game_state) catch |err| {
+            std.log.err("Error occurred in update thread: {}", .{err});
+            return;
+        };
     }
 }
 
@@ -82,15 +108,18 @@ fn update(allocator: std.mem.Allocator, game_state: *GameState) !void {
             }
         },
         .Game => {
+            const update_time: f32 = @as(f32, @floatFromInt(update_timer.read())) / std.time.ns_per_s;
+            update_timer.reset();
+
             if (raylib.isKeyDown(.left) or raylib.isKeyDown(.a)) {
-                game_state.player.pos -= game_state.player.speed * raylib.getFrameTime();
-                game_state.player.angle += game_state.player.tilt_speed * raylib.getFrameTime();
+                game_state.player.pos -= game_state.player.speed * update_time;
+                game_state.player.angle += game_state.player.tilt_speed * update_time;
                 if (game_state.player.angle > Player.MAX_ANGLE) {
                     game_state.player.angle = Player.MAX_ANGLE;
                 }
             } else if (raylib.isKeyDown(.right) or raylib.isKeyDown(.d)) {
-                game_state.player.pos += game_state.player.speed * raylib.getFrameTime();
-                game_state.player.angle -= game_state.player.tilt_speed * raylib.getFrameTime();
+                game_state.player.pos += game_state.player.speed * update_time;
+                game_state.player.angle -= game_state.player.tilt_speed * update_time;
                 if (game_state.player.angle < -Player.MAX_ANGLE) {
                     game_state.player.angle = -Player.MAX_ANGLE;
                 }
@@ -99,7 +128,7 @@ fn update(allocator: std.mem.Allocator, game_state: *GameState) !void {
                 if (std.math.approxEqAbs(f32, game_state.player.angle, 0, Player.ANGLE_EPSILON)) {
                     game_state.player.angle = 0;
                 } else {
-                    game_state.player.angle *= 0.95;
+                    game_state.player.angle *= 1 - (10 * update_time);
                 }
             }
 
@@ -110,13 +139,13 @@ fn update(allocator: std.mem.Allocator, game_state: *GameState) !void {
 
             game_state.player.update();
 
-            const collision_points = try game_state.tunnel.getCollisionPoints(allocator);
-            defer allocator.free(collision_points);
+            const collision_recs = try game_state.tunnel.getCollisionRecs(allocator);
+            defer allocator.free(collision_recs);
 
-            for (collision_points) |point| {
+            for (collision_recs) |rec| {
                 const triangle = game_state.player.triangle;
                 // You lose!
-                if (raylib.checkCollisionPointTriangle(point, triangle[0], triangle[1], triangle[2])) {
+                if (raylib.checkCollisionPointRec(triangle[0], rec) or raylib.checkCollisionPointRec(triangle[1], rec) or raylib.checkCollisionPointRec(triangle[2], rec)) {
                     game_state.screen = .GameOver;
                     return;
                 }
@@ -128,12 +157,12 @@ fn update(allocator: std.mem.Allocator, game_state: *GameState) !void {
                 game_state.score += 1;
                 game_state.seconds_since_last_advance = 0;
             } else {
-                game_state.seconds_since_last_advance += raylib.getFrameTime();
+                game_state.seconds_since_last_advance += update_time;
             }
 
-            game_state.advance_speed = 100 + (@as(u64, @intFromFloat(game_state.time_elapsed)));
+            game_state.advance_speed = 100 + (4 * @as(u64, @intFromFloat(game_state.time_elapsed)));
 
-            game_state.time_elapsed += raylib.getFrameTime();
+            game_state.time_elapsed += update_time;
         },
         .GameOver => {
             if (raylib.isKeyPressed(.space)) {
@@ -180,9 +209,9 @@ fn drawGame(game_state: *GameState) void {
         raylib.drawText(hud, 16, 16, constants.screenFontSize, raylib.Color.black);
     } else |_| {}
     if (builtin.mode == .Debug and debug_info_enabled) {
-        var currentFps: [64]u8 = undefined;
-        if (std.fmt.bufPrintZ(&currentFps, "FPS: {d}", .{raylib.getFPS()})) |fps| {
-            util.drawTextAlignRight(fps, 16, 16, constants.screenFontSize, raylib.Color.black);
+        var debugHud: [1024]u8 = undefined;
+        if (std.fmt.bufPrintZ(&debugHud, "FPS: {d}\nTime: {d:.1}", .{ raylib.getFPS(), game_state.time_elapsed })) |hud| {
+            util.drawTextAlignRight(hud, 16, 32, constants.screenFontSize, raylib.Color.black);
         } else |_| {}
     }
 }
