@@ -14,12 +14,12 @@ const Segment = struct {
     width: u16 = 0,
 };
 
-const SEGMENT_COUNT = 200;
+const SEGMENT_COUNT = constants.screenHeight / SEGMENT_HEIGHT;
 const MIN_SEGMENT_WIDTH = Player.SIZE * 4;
 const MAX_SEGMENT_WIDTH = Player.SIZE * 16;
 const MAX_SEGMENT_WIDTH_VARIABILITY = 8;
 const MAX_SEGMENT_POS_VARIABILITY = Player.SIZE / 2;
-const SEGMENT_HEIGHT = 5;
+const SEGMENT_HEIGHT = 4;
 
 allocator: std.mem.Allocator,
 segmentBuf: []Segment,

@@ -176,7 +176,7 @@ fn drawGame(game_state: *GameState) void {
     game_state.tunnel.draw();
 
     var hudBuf: [128]u8 = undefined;
-    if (std.fmt.bufPrintZ(&hudBuf, "Score: {d}\t|\tSpeed: {d}", .{ game_state.score, game_state.advance_speed })) |hud| {
+    if (std.fmt.bufPrintZ(&hudBuf, "Score: {d}\nSpeed: {d}", .{ game_state.score, game_state.advance_speed })) |hud| {
         raylib.drawText(hud, 16, 16, constants.screenFontSize, raylib.Color.black);
     } else |_| {}
     if (builtin.mode == .Debug and debug_info_enabled) {
