@@ -45,6 +45,8 @@ const GameState = struct {
 // Globals
 var debug_info_enabled: bool = false;
 var update_timer: std.time.Timer = undefined;
+// Update 1000 times a second. If the game's speed surpasses this, this is the limit for how fast it will go
+const UPDATE_INTERVAL = 1000;
 
 pub fn main() !void {
     raylib.initWindow(constants.screenWidth, constants.screenHeight, "Tunnel");
@@ -89,6 +91,7 @@ pub fn main() !void {
 
 fn updateThread(mutex: *std.Thread.Mutex, allocator: std.mem.Allocator, game_state: *GameState) void {
     while (!raylib.windowShouldClose()) {
+        std.Thread.sleep((1 / UPDATE_INTERVAL) * std.time.ns_per_s);
         mutex.lock();
         defer mutex.unlock();
 
