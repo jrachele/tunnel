@@ -9,7 +9,11 @@ pub fn WrapAroundArray(
 
         const Self = @This();
 
+        /// Init the wrap around array with a slice
         pub fn init(buf: []T) Self {
+            if (buf.len == 0) {
+                std.debug.panic("Cannot create wrap around array from empty slice!", .{});
+            }
             return .{
                 .buf = buf,
                 .cursor = 0,
@@ -18,11 +22,7 @@ pub fn WrapAroundArray(
 
         /// Gets the first element in the wrap-around-array, semantically
         /// This is not the first element in the underlying buffer.
-        pub fn first(self: *const Self) !T {
-            if (self.buf.len == 0) {
-                return error.NoElements;
-            }
-
+        pub fn first(self: *const Self) T {
             if (self.cursor >= self.buf.len) {
                 std.debug.panic("Cursor exceeds buffer length!", .{});
             }
@@ -32,11 +32,7 @@ pub fn WrapAroundArray(
 
         /// Gets the last element in the wrap-around-array, semantically
         /// This is not the last element in the underlying buffer.
-        pub fn last(self: *const Self) !T {
-            if (self.buf.len == 0) {
-                return error.NoElements;
-            }
-
+        pub fn last(self: *const Self) T {
             if (self.cursor >= self.buf.len) {
                 std.debug.panic("Cursor exceeds buffer length!", .{});
             }
@@ -50,17 +46,13 @@ pub fn WrapAroundArray(
 
         /// Replace the current element with `elem` then
         /// advance the cursor forward
-        pub fn advanceAndReplace(self: *Self, elem: T) !void {
-            if (self.buf.len == 0) {
-                return error.NoElements;
-            }
-
+        pub fn advanceAndReplace(self: *Self, elem: T) void {
             if (self.cursor >= self.buf.len) {
                 std.debug.panic("Cursor exceeds buffer length!", .{});
             }
 
             self.buf[self.cursor] = elem;
-            self.cursor += 1 % self.buf.len;
+            self.cursor = (self.cursor + 1) % self.buf.len;
         }
 
         pub fn iter(self: *const Self) Iterator {
@@ -83,8 +75,8 @@ pub fn WrapAroundArray(
                     iterator.index = (index + 1) % iterator.wrap_around_array.buf.len;
                     return ret;
                 } else {
-                    const ret = iterator.wrap_around_array.first() catch unreachable;
-                    iterator.index = iterator.wrap_around_array.cursor + 1;
+                    const ret = iterator.wrap_around_array.first();
+                    iterator.index = (iterator.wrap_around_array.cursor + 1) % iterator.wrap_around_array.buf.len;
 
                     return ret;
                 }
@@ -104,19 +96,19 @@ test "wrap_around_array iterate like array" {
         i += 1;
     }
 
-    try std.testing.expectEqual(arr.first() catch unreachable, 2);
-    try std.testing.expectEqual(arr.last() catch unreachable, 12);
+    try std.testing.expectEqual(arr.first(), 2);
+    try std.testing.expectEqual(arr.last(), 12);
 }
 
 test "wrap_around_array advanceAndReplace" {
     var buf = [_]i32{ 2, 4, 6, 8, 10, 12 };
     var arr: WrapAroundArray(i32) = .init(&buf);
 
-    try arr.advanceAndReplace(1337);
+    arr.advanceAndReplace(1337);
 
     try std.testing.expectEqual(arr.cursor, 1);
-    try std.testing.expectEqual(arr.first() catch unreachable, 4);
-    try std.testing.expectEqual(arr.last() catch unreachable, 1337);
+    try std.testing.expectEqual(arr.first(), 4);
+    try std.testing.expectEqual(arr.last(), 1337);
     const expected_iter_results = [_]i32{ 4, 6, 8, 10, 12, 1337 };
 
     var it = arr.iter();
