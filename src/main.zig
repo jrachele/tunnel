@@ -75,6 +75,22 @@ const Player = struct {
     }
 };
 
+const Tunnel = struct {
+    const Segment = struct {
+        pos: u4 = 0,
+        width: u4 = 0,
+    };
+
+    segments: std.fifo.LinearFifo(Segment, .{ .Static = 256 }),
+
+    // pub fn init() Tunnel {
+    // }
+    //
+    // pub fn advance(tunnel: *Tunnel) void {
+    //
+    // }
+};
+
 const GameState = struct {
     screen: Screen,
     player: Player,
