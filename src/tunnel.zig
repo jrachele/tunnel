@@ -15,7 +15,7 @@ const Segment = struct {
 };
 
 const SEGMENT_COUNT = constants.screenHeight / SEGMENT_HEIGHT;
-const MIN_SEGMENT_WIDTH = Player.SIZE * 4;
+const MIN_SEGMENT_WIDTH = Player.SIZE * 8;
 const MAX_SEGMENT_WIDTH = Player.SIZE * 16;
 const MAX_SEGMENT_WIDTH_VARIABILITY = 8;
 const MAX_SEGMENT_POS_VARIABILITY = Player.SIZE / 2;
